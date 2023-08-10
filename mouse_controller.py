@@ -10,7 +10,7 @@ from metal_pipe import play_mp3
 
 mouse = Controller()
  
-mouse_controller_file = 'buy_capsules.txt'
+mouse_controller_file = 'mouse_movements/buy_capsules.txt'
 
 num_times = 7
 

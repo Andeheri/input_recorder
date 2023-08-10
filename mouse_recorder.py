@@ -3,12 +3,9 @@ import pynput
 import keyboard
 import logging  
 import win32api
+from time import sleep
 
 mouse = Controller()
-
-mouse_log_file = 'select_capsules_120.txt'
-
-logging.basicConfig(filename=mouse_log_file, level=logging.DEBUG, format='%(asctime)s: %(message)s')
 
 def on_move(x, y):
     x, y = mouse.position 
@@ -26,19 +23,16 @@ def on_press(key):
         # Stop listener 
         return False  
 
-def main():
-    print('Press \'space\' to start and stop.')
-    pressed = False 
-    while True:
-        if keyboard.is_pressed('space'):
-            pressed = True 
-        elif not keyboard.is_pressed('space') and pressed:
-            break
-    print('Started')
+def record(file: str):
     # Clears file
-    with open(mouse_log_file, 'w') as f:
+    with open(file, 'w') as f:
         pass
-    win32api.Beep(700, 200)
+    logging.basicConfig(filename=file, level=logging.DEBUG, format='%(asctime)s: %(message)s')
+    win32api.Beep(550, 1000)
+    sleep(0.5)
+    win32api.Beep(550, 800)
+    sleep(0.5)
+    win32api.Beep(800, 1300)
     # Start keyboard listener
     listener = pynput.keyboard.Listener(on_press=on_press)
     listener.start()
@@ -47,11 +41,8 @@ def main():
         # Wait for enter key to be pressed
         listener.join()
         print('Stopped')
-        win32api.Beep(700, 200)
+        win32api.Beep(700, 500)
         # Stop mouse listener
         mouse_listener.stop()
         mouse_listener.join()
-
- 
-if __name__ == '__main__': 
-    main()
+    return True

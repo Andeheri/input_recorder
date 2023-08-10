@@ -2,9 +2,11 @@
 from pathlib import Path
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QSize, Qt, QThreadPool, QRunnable, pyqtSignal, QObject
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import QApplication, QFileDialog, QFrame, QMainWindow,  QLabel, QProgressBar
+
+from mouse_recorder import *
 
 download_path = Path.home().joinpath('Downloads')
 
@@ -20,12 +22,31 @@ window_width = 800
 window_height = 400
 
 
+class WorkerSignals(QObject):
+    finished = pyqtSignal()
+
+
+class Recorder(QRunnable):  
+    def __init__(self, window):
+        super(Recorder, self).__init__()
+        self.signals = WorkerSignals()
+        self.window = window
+
+    def run(self):
+        result = record(self.window.current_directory.joinpath(self.window.file_name))
+        self.signals.finished.emit()
+
+
 class MyWindow(QMainWindow):
+    current_directory = Path('./mouse_movements')
+
     def __init__(self):
         super(MyWindow,self).__init__()
         self.initUI()
         self.recording = False
         self.playing = False
+        self.file_name = None
+        self.threadpool = QThreadPool()
 
     def play_button_clicked(self):
         print("Play button clicked")
@@ -40,17 +61,41 @@ class MyWindow(QMainWindow):
         self.recording = not self.recording
         if not self.recording:
             self.record_button.setIcon(QIcon(record_button_path))
-        else:
+            # Stop recording
+        else:  # Start recording
+            if not self.file_name:
+                self.recording = not self.recording
+                return
             self.record_button.setIcon(QIcon(rounded_square_path))
 
+            recorder = Recorder(self)
+            recorder.signals.finished.connect(self.recording_finished)
+            self.threadpool.start(recorder)
+    
+    def recording_finished(self):
+        print("Long task finished")
+        self.record_button.setIcon(QIcon(record_button_path))
 
     def combo_selected(self):
-        print("Combo Item selected: "+self.dd_menu.currentText())
+        print("Combo Item selected: " + self.dd_menu.currentText())
 
     def browse_folder(self):
-        chosen_dir = QFileDialog.getExistingDirectory(self, "Choose Directory")
-        if chosen_dir:  # If a directory is chosen
-            print("Chosen directory: ", chosen_dir)
+        self.current_directory = QFileDialog.getExistingDirectory(self, "Choose Directory")
+        if self.current_directory:  # If a directory is chosen
+            print("Chosen directory: ", self.current_directory)
+            self.directory_label.setText(f"Current directory selected:\n{self.current_directory}")
+            self.directory_label.adjustSize()
+
+    def text_field_changed(self, file_name: str):
+        print(f"User entered '{file_name}'")
+        self.file_name = file_name + '.txt'
+    
+        # Overriding the resizeEvent method
+    def resizeEvent(self, event):
+        v_line_width = 3
+        h_line_height = 3
+        self.v_line.setGeometry(self.width() // 2 - v_line_width // 2, 0, v_line_width, self.height() // 2)
+        self.h_line.setGeometry(0, self.height() // 2 - h_line_height // 2, self.width(), h_line_height)
 
     def initUI(self):
         screen = QApplication.desktop().screenGeometry()
@@ -61,10 +106,14 @@ class MyWindow(QMainWindow):
         self.setStyleSheet("QWidget { background-color: #d6cec3 ;}")
 
         # Vertical line
-        self.line = QFrame(self)
-        self.line.setFrameShape(QFrame.VLine)
-        self.line.setFrameShadow(QFrame.Sunken)
-        self.line.setGeometry(int(self.width() / 2), 0, 10, self.height())
+        self.v_line = QFrame(self)
+        self.v_line.setFrameShape(QFrame.VLine)
+        self.v_line.setFrameShadow(QFrame.Sunken)
+
+        # Horizontal line
+        self.h_line = QFrame(self)
+        self.h_line.setFrameShape(QFrame.HLine)
+        self.h_line.setFrameShadow(QFrame.Sunken)
 
         # Record side
 
@@ -75,7 +124,7 @@ class MyWindow(QMainWindow):
         self.label.setFont(font)
         self.label.setStyleSheet("""QLabel {
                                         background-color: white;
-                                        border-radius: 5px;
+                                        border-radius:  5px;
                                         border: 5px solid white;
                                     }""")
         self.label.adjustSize()
@@ -103,13 +152,14 @@ class MyWindow(QMainWindow):
         self.text_field.move(150, int(85 + icon_size / 2))
         self.text_field.setFixedSize(230, 50)
         self.text_field.setPlaceholderText("Enter file name")
+        self.text_field.textChanged.connect(self.text_field_changed)
 
         # Directory button
         self.directory_button = QtWidgets.QPushButton(self)
         self.directory_button.setIcon(QIcon(folder_button_path))
         self.directory_button.setIconSize(QSize(icon_size, icon_size))
         self.directory_button.clicked.connect(self.browse_folder)
-        self.directory_button.move(50,190)
+        self.directory_button.move(50,230)
         self.directory_button.setFixedSize(button_size, button_size)
         self.directory_button.setStyleSheet("""QPushButton {  
                             border: 2px solid black; 
@@ -118,6 +168,13 @@ class MyWindow(QMainWindow):
                         QPushButton:hover {  
                             background-color: beige; 
                         }""")
+        
+        self.directory_label = QLabel(self)
+        self.directory_label.setText(f"Current directory selected:\n{MyWindow.current_directory}")
+        font = QFont("Arial", 8)  # Set font and size
+        self.directory_label.setFont(font)
+        self.directory_label.adjustSize()
+        self.directory_label.move(60 + button_size, 250)
         
         # Play side
 
